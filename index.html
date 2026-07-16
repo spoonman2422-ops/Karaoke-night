@@ -86,13 +86,13 @@ body {
 /* Go to Firebase Console -> Project settings -> your web app -> copy the        */
 /* firebaseConfig object shown there and paste it in place of the one below.    */
 const firebaseConfig = {
-  apiKey: "AIzaSyC7Fc6BbZ_PGMY2L5duGbkOBwmVDBJyYwk",
-  authDomain: "karaoke-night-dccdf.firebaseapp.com",
-  databaseURL: "https://karaoke-night-dccdf-default-rtdb.asia-southeast1.firebasedatabase.app",
-  projectId: "karaoke-night-dccdf",
-  storageBucket: "karaoke-night-dccdf.firebasestorage.app",
-  messagingSenderId: "189533579466",
-  appId: "1:189533579466:web:cda440e0be49d22b4bac33"
+  apiKey: "PASTE_YOUR_API_KEY",
+  authDomain: "PASTE_YOUR_PROJECT.firebaseapp.com",
+  databaseURL: "https://PASTE_YOUR_PROJECT-default-rtdb.firebaseio.com",
+  projectId: "PASTE_YOUR_PROJECT",
+  storageBucket: "PASTE_YOUR_PROJECT.appspot.com",
+  messagingSenderId: "PASTE_YOUR_SENDER_ID",
+  appId: "PASTE_YOUR_APP_ID"
 };
 firebase.initializeApp(firebaseConfig);
 const fbDb = firebase.database();
@@ -155,6 +155,7 @@ const state = {
   searching: false,
   searchError: '',
   ytApiKey: '',
+  songLimit: 0, // 0 = unlimited
   showApiKeyBox: true,
   showQR: false,
   copied: false,
@@ -230,6 +231,7 @@ async function startHost() {
     state.nowPlaying = await kvdbGet(state.bucket, 'nowPlaying', null);
     state.participants = await kvdbGet(state.bucket, 'participants', []);
     state.ytApiKey = await kvdbGet(state.bucket, 'apiKey', '');
+    state.songLimit = await kvdbGet(state.bucket, 'songLimit', 0);
     enterRoom();
   } catch (e) {
     alert('Could not start room: ' + e.message);
@@ -266,14 +268,32 @@ async function respondToRequest(id, status) {
   renderRoomDynamic();
 }
 
+async function kickParticipant(id) {
+  const current = await kvdbGet(state.bucket, 'participants', []);
+  const updated = current.map((p) => (p.id === id ? { ...p, status: 'kicked' } : p));
+  await kvdbSet(state.bucket, 'participants', updated);
+  state.participants = updated;
+  renderRoomDynamic();
+}
+
 async function addToQueue(video) {
+  const myName = state.role === 'host' ? 'Host' : (state.name || 'Guest');
+  if (state.role !== 'host' && state.songLimit > 0) {
+    const currentCount = state.queue.filter((s) => s.addedBy === myName).length +
+      (state.nowPlaying && state.nowPlaying.addedBy === myName ? 1 : 0);
+    if (currentCount >= state.songLimit) {
+      state.searchError = `You've reached the limit of ${state.songLimit} song(s) per person. Wait for one of yours to play before adding another.`;
+      renderRoomDynamic();
+      return;
+    }
+  }
   const current = await kvdbGet(state.bucket, 'queue', []);
   const updated = current.concat([{
     id: uid('song'),
     videoId: video.videoId,
     title: video.title,
     thumbnail: video.thumbnail,
-    addedBy: state.role === 'host' ? 'Host' : (state.name || 'Guest'),
+    addedBy: myName,
   }]);
   await kvdbSet(state.bucket, 'queue', updated);
   state.queue = updated;
@@ -418,9 +438,12 @@ function startPolling() {
         state.joinStatus = me.status;
         if (me.status === 'approved') enterRoom();
         else if (me.status === 'denied') { state.screen = 'denied'; render(); }
+        else if (me.status === 'kicked') { stopPolling(); state.screen = 'kicked'; render(); return; }
       }
       const sharedKey = await kvdbGet(state.bucket, 'apiKey', '');
       if (sharedKey && sharedKey !== state.ytApiKey) state.ytApiKey = sharedKey;
+      const sharedLimit = await kvdbGet(state.bucket, 'songLimit', 0);
+      if (sharedLimit !== state.songLimit) state.songLimit = sharedLimit;
     }
     if (state.role === 'host' && !state.nowPlaying && state.queue.length > 0) {
       advanceQueue();
@@ -451,6 +474,10 @@ function render() {
     if (cancelBtn) cancelBtn.onclick = exitRoom;
   } else if (state.screen === 'denied') {
     app.innerHTML = renderDenied();
+  } else if (state.screen === 'kicked') {
+    app.innerHTML = renderKicked();
+    const backBtn = el('back-to-start-btn');
+    if (backBtn) backBtn.onclick = exitRoom;
   } else if (state.screen === 'room') {
     app.innerHTML = renderRoomShell();
     bindRoomEvents();
@@ -490,6 +517,9 @@ function renderWaiting() {
 function renderDenied() {
   return `<div class="center-col"><h2>Request denied</h2><p style="color:var(--muted)">The host didn't approve this request.</p></div>`;
 }
+function renderKicked() {
+  return `<div class="center-col"><h2>Removed from the room</h2><p style="color:var(--muted)">The host removed you from this session.</p><button class="btn-ghost" id="back-to-start-btn" style="margin-top:16px;">Back to start</button></div>`;
+}
 
 function renderRoomShell() {
   const isHost = state.role === 'host';
@@ -502,6 +532,15 @@ function renderRoomShell() {
       </div>
     </div>
     <div id="sync-error-banner" style="color:var(--pink); font-size:12px; margin-bottom:10px;"></div>
+    ${isHost ? `
+    <div class="panel">
+      <div class="panel-title">Room settings</div>
+      <label class="hint-text" style="display:block; margin-bottom:6px;">Max songs per guest (0 = unlimited)</label>
+      <div style="display:flex; gap:8px;">
+        <input class="input" id="song-limit-input" type="number" min="0" style="flex:1; margin-bottom:0;" value="${state.songLimit || 0}" />
+        <button class="btn-primary-sm" id="save-limit-btn">Set</button>
+      </div>
+    </div>` : ''}
     <div id="qr-slot"></div>
     <div id="pending-slot"></div>
     <div class="now-playing-card">
@@ -544,6 +583,13 @@ function bindRoomEvents() {
   if (qrBtn) qrBtn.onclick = () => { state.showQR = !state.showQR; renderRoomDynamic(); };
   el('search-btn').onclick = doSearch;
   el('search-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') doSearch(); });
+  const saveLimitBtn = el('save-limit-btn');
+  if (saveLimitBtn) saveLimitBtn.onclick = async () => {
+    const input = el('song-limit-input');
+    const val = Math.max(0, parseInt(input.value, 10) || 0);
+    state.songLimit = val;
+    await kvdbSet(state.bucket, 'songLimit', val);
+  };
 }
 
 function renderRoomDynamic() {
@@ -604,7 +650,7 @@ function renderRoomDynamic() {
   if (state.nowPlaying) {
     if (emptyMsg) emptyMsg.style.display = 'none';
     if (playerBox) playerBox.style.display = 'block';
-    if (meta) meta.innerHTML = `<div class="now-playing-title">${escapeHtml(state.nowPlaying.title)}</div><div class="ticket-meta">added by ${escapeHtml(state.nowPlaying.addedBy)}</div>`;
+    if (meta) meta.innerHTML = `<div class="now-playing-title">${escapeHtml(state.nowPlaying.title)}</div><div class="ticket-meta">Input by: ${escapeHtml(state.nowPlaying.addedBy)}</div>`;
     if (skipBtn) { skipBtn.style.display = 'inline-block'; skipBtn.onclick = skipCurrent; }
   } else {
     if (emptyMsg) emptyMsg.style.display = 'block';
@@ -651,7 +697,7 @@ function renderRoomDynamic() {
           <img src="${item.thumbnail}" class="ticket-thumb" alt="" />
           <div style="flex:1; min-width:0;">
             <div class="ticket-title">${escapeHtml(item.title)}</div>
-            <div class="ticket-meta">added by ${escapeHtml(item.addedBy)}</div>
+            <div class="ticket-meta">Input by: ${escapeHtml(item.addedBy)}</div>
           </div>
           <div style="display:flex; flex-direction:column; gap:4px;">
             ${canMoveUp ? `<button class="icon-btn" data-up="${item.id}">▲</button>` : ''}
@@ -672,7 +718,16 @@ function renderRoomDynamic() {
     if (isHost && active.length > 0) {
       partPanel.style.display = 'block';
       el('participants-title').textContent = `In the room (${active.length})`;
-      el('participants-list').innerHTML = active.map((p) => `<span class="pill-tag">${escapeHtml(p.name)}</span>`).join('');
+      el('participants-list').innerHTML = active.map((p) => `
+        <span class="pill-tag">
+          ${escapeHtml(p.name)}
+          <button data-kick="${p.id}" style="background:none; border:none; color:var(--pink); cursor:pointer; font-weight:700; margin-left:6px; padding:0;">✕</button>
+        </span>`).join('');
+      el('participants-list').querySelectorAll('[data-kick]').forEach((b) => {
+        b.onclick = () => {
+          if (confirm('Remove this person from the room?')) kickParticipant(b.getAttribute('data-kick'));
+        };
+      });
     } else {
       partPanel.style.display = 'none';
     }
