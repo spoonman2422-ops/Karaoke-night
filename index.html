@@ -79,6 +79,24 @@ body {
 <body>
 <div id="app"></div>
 
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<script>
+/* ===================== PASTE YOUR FIREBASE CONFIG HERE ===================== */
+/* Go to Firebase Console -> Project settings -> your web app -> copy the        */
+/* firebaseConfig object shown there and paste it in place of the one below.    */
+const firebaseConfig = {
+  apiKey: "PASTE_YOUR_API_KEY",
+  authDomain: "PASTE_YOUR_PROJECT.firebaseapp.com",
+  databaseURL: "https://PASTE_YOUR_PROJECT-default-rtdb.firebaseio.com",
+  projectId: "PASTE_YOUR_PROJECT",
+  storageBucket: "PASTE_YOUR_PROJECT.appspot.com",
+  messagingSenderId: "PASTE_YOUR_SENDER_ID",
+  appId: "PASTE_YOUR_APP_ID"
+};
+firebase.initializeApp(firebaseConfig);
+const fbDb = firebase.database();
+</script>
 <script>
 /* ===================== Config ===================== */
 const KARAOKE_CHANNELS = ['sing king', 'karafun', 'zzang karaoke', 'karaoke version', 'stingray karaoke', 'atomic karaoke'];
@@ -92,21 +110,15 @@ function escapeHtml(str) {
 }
 
 async function kvdbCreateBucket() {
-  // No external service needed anymore - just generate a room code locally.
+  // No external call needed - Firebase paths are created automatically on first write.
   return uid('room');
 }
 async function kvdbGet(bucket, key, fallback) {
   try {
-    const res = await fetch(`/.netlify/functions/room?bucket=${encodeURIComponent(bucket)}&key=${encodeURIComponent(key)}`);
-    if (!res.ok) {
-      const errTxt = await res.text().catch(() => '');
-      setSyncError(`Read failed (${res.status}): ${errTxt}`);
-      return fallback;
-    }
-    const txt = await res.text();
+    const snap = await fbDb.ref(`rooms/${bucket}/${key}`).once('value');
     setSyncError(null);
-    if (!txt || txt === 'null') return fallback;
-    return JSON.parse(txt);
+    if (!snap.exists()) return fallback;
+    return snap.val();
   } catch (e) {
     setSyncError('Read failed: ' + e.message);
     return fallback;
@@ -114,17 +126,8 @@ async function kvdbGet(bucket, key, fallback) {
 }
 async function kvdbSet(bucket, key, value) {
   try {
-    const res = await fetch(`/.netlify/functions/room?bucket=${encodeURIComponent(bucket)}&key=${encodeURIComponent(key)}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(value),
-    });
-    if (!res.ok) {
-      const errTxt = await res.text().catch(() => '');
-      setSyncError(`Save failed (${res.status}): ${errTxt}`);
-    } else {
-      setSyncError(null);
-    }
+    await fbDb.ref(`rooms/${bucket}/${key}`).set(value === undefined ? null : value);
+    setSyncError(null);
   } catch (e) {
     setSyncError('Save failed: ' + e.message);
   }
