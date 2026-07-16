@@ -86,13 +86,13 @@ body {
 /* Go to Firebase Console -> Project settings -> your web app -> copy the        */
 /* firebaseConfig object shown there and paste it in place of the one below.    */
 const firebaseConfig = {
-  apiKey: "AIzaSyC7Fc6BbZ_PGMY2L5duGbkOBwmVDBJyYwk",
-  authDomain: "karaoke-night-dccdf.firebaseapp.com",
-  databaseURL: "https://karaoke-night-dccdf-default-rtdb.asia-southeast1.firebasedatabase.app",
-  projectId: "karaoke-night-dccdf",
-  storageBucket: "karaoke-night-dccdf.firebasestorage.app",
-  messagingSenderId: "189533579466",
-  appId: "1:189533579466:web:cda440e0be49d22b4bac33"
+  apiKey: "PASTE_YOUR_API_KEY",
+  authDomain: "PASTE_YOUR_PROJECT.firebaseapp.com",
+  databaseURL: "https://PASTE_YOUR_PROJECT-default-rtdb.firebaseio.com",
+  projectId: "PASTE_YOUR_PROJECT",
+  storageBucket: "PASTE_YOUR_PROJECT.appspot.com",
+  messagingSenderId: "PASTE_YOUR_SENDER_ID",
+  appId: "PASTE_YOUR_APP_ID"
 };
 firebase.initializeApp(firebaseConfig);
 const fbDb = firebase.database();
@@ -229,6 +229,7 @@ async function startHost() {
     state.queue = await kvdbGet(state.bucket, 'queue', []);
     state.nowPlaying = await kvdbGet(state.bucket, 'nowPlaying', null);
     state.participants = await kvdbGet(state.bucket, 'participants', []);
+    state.ytApiKey = await kvdbGet(state.bucket, 'apiKey', '');
     enterRoom();
   } catch (e) {
     alert('Could not start room: ' + e.message);
@@ -351,10 +352,18 @@ async function doSearch() {
   const qInput = el('search-input');
   const keyInput = el('api-key-input');
   const query = qInput ? qInput.value.trim() : '';
-  if (keyInput) state.ytApiKey = keyInput.value.trim();
+  if (keyInput) {
+    const newKey = keyInput.value.trim();
+    if (newKey && newKey !== state.ytApiKey) {
+      state.ytApiKey = newKey;
+      if (state.role === 'host') kvdbSet(state.bucket, 'apiKey', newKey);
+    }
+  }
   if (!query) return;
   if (!state.ytApiKey) {
-    state.searchError = 'Paste your YouTube API key above first.';
+    state.searchError = state.role === 'host'
+      ? 'Paste your YouTube API key above first.'
+      : 'The host hasn\'t set up search yet — ask them to paste their API key in.';
     renderRoomDynamic();
     return;
   }
@@ -410,13 +419,15 @@ function startPolling() {
         if (me.status === 'approved') enterRoom();
         else if (me.status === 'denied') { state.screen = 'denied'; render(); }
       }
+      const sharedKey = await kvdbGet(state.bucket, 'apiKey', '');
+      if (sharedKey && sharedKey !== state.ytApiKey) state.ytApiKey = sharedKey;
     }
     if (state.role === 'host' && !state.nowPlaying && state.queue.length > 0) {
       advanceQueue();
       return;
     }
     if (state.screen === 'room') renderRoomDynamic();
-    maybeUpdatePlayer(state.nowPlaying);
+    if (state.role === 'host') maybeUpdatePlayer(state.nowPlaying);
   }, POLL_MS);
 }
 function stopPolling() { if (pollTimer) clearInterval(pollTimer); pollTimer = null; }
@@ -424,7 +435,7 @@ function stopPolling() { if (pollTimer) clearInterval(pollTimer); pollTimer = nu
 function enterRoom() {
   state.screen = 'room';
   render();
-  initPlayer();
+  if (state.role === 'host') initPlayer();
   startPolling();
 }
 
@@ -496,16 +507,19 @@ function renderRoomShell() {
     <div class="now-playing-card">
       <div class="now-playing-label">NOW PLAYING</div>
       <div id="now-playing-info-empty" style="color:var(--muted);">Nothing queued yet — search below and add a song.</div>
+      ${isHost ? `
       <div class="player-box" id="player-box" style="display:none;">
         <div id="yt-player"></div>
-      </div>
+      </div>` : ''}
       <div id="now-playing-meta"></div>
       ${isHost ? `<button class="btn-secondary" id="skip-btn" style="display:none;">Skip song</button>` : ''}
     </div>
     <div class="panel">
       <div class="panel-title">Add a song</div>
+      ${isHost ? `
       <input type="password" class="input" id="api-key-input" placeholder="Paste your YouTube Data API key" value="${escapeHtml(state.ytApiKey)}" />
-      <div class="hint-text">Stored only in this browser tab's memory — never saved, never sent anywhere but YouTube.</div>
+      <div class="hint-text">Kept in the host's browser only — guests can search without needing their own key.</div>
+      ` : ''}
       <div style="display:flex; gap:8px; margin-top:8px;">
         <input class="input" id="search-input" placeholder="Search a song…" style="flex:1; margin-bottom:0;" />
         <button class="btn-primary-sm" id="search-btn">Search</button>
