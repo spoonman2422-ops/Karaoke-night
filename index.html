@@ -86,13 +86,13 @@ body {
 /* Go to Firebase Console -> Project settings -> your web app -> copy the        */
 /* firebaseConfig object shown there and paste it in place of the one below.    */
 const firebaseConfig = {
-  apiKey: "AIzaSyC7Fc6BbZ_PGMY2L5duGbkOBwmVDBJyYwk",
-  authDomain: "karaoke-night-dccdf.firebaseapp.com",
-  databaseURL: "https://karaoke-night-dccdf-default-rtdb.asia-southeast1.firebasedatabase.app",
-  projectId: "karaoke-night-dccdf",
-  storageBucket: "karaoke-night-dccdf.firebasestorage.app",
-  messagingSenderId: "189533579466",
-  appId: "1:189533579466:web:cda440e0be49d22b4bac33""
+  apiKey: "PASTE_YOUR_API_KEY",
+  authDomain: "PASTE_YOUR_PROJECT.firebaseapp.com",
+  databaseURL: "https://PASTE_YOUR_PROJECT-default-rtdb.firebaseio.com",
+  projectId: "PASTE_YOUR_PROJECT",
+  storageBucket: "PASTE_YOUR_PROJECT.appspot.com",
+  messagingSenderId: "PASTE_YOUR_SENDER_ID",
+  appId: "PASTE_YOUR_APP_ID"
 };
 firebase.initializeApp(firebaseConfig);
 const fbDb = firebase.database();
@@ -100,7 +100,6 @@ const fbDb = firebase.database();
 <script>
 /* ===================== Config ===================== */
 const KARAOKE_CHANNELS = ['sing king', 'karafun', 'zzang karaoke', 'karaoke version', 'stingray karaoke', 'atomic karaoke'];
-const POLL_MS = 2500;
 
 /* ===================== Helpers ===================== */
 function uid(prefix) { return prefix + '-' + Math.random().toString(36).slice(2, 9); }
@@ -162,7 +161,6 @@ const state = {
   manualRoomCode: '',
 };
 
-let pollTimer = null;
 let player = null;
 let playerReady = false;
 let lastLoadedVideoId = null;
@@ -257,7 +255,7 @@ async function requestJoin() {
   state.participants = updated;
   state.screen = 'waiting';
   render();
-  startPolling();
+  attachRoomListeners();
 }
 
 async function respondToRequest(id, status) {
@@ -322,21 +320,27 @@ async function removeFromQueue(id) {
 }
 
 async function advanceQueue() {
-  const current = await kvdbGet(state.bucket, 'queue', []);
-  if (current.length === 0) {
-    await kvdbSet(state.bucket, 'nowPlaying', null);
-    state.nowPlaying = null;
+  if (advancing) return;
+  advancing = true;
+  try {
+    const current = await kvdbGet(state.bucket, 'queue', []);
+    if (current.length === 0) {
+      await kvdbSet(state.bucket, 'nowPlaying', null);
+      state.nowPlaying = null;
+      renderRoomDynamic();
+      return;
+    }
+    const [next, ...rest] = current;
+    const np = { ...next, startedAt: Date.now() };
+    await kvdbSet(state.bucket, 'queue', rest);
+    await kvdbSet(state.bucket, 'nowPlaying', np);
+    state.queue = rest;
+    state.nowPlaying = np;
     renderRoomDynamic();
-    return;
+    maybeUpdatePlayer(np);
+  } finally {
+    advancing = false;
   }
-  const [next, ...rest] = current;
-  const np = { ...next, startedAt: Date.now() };
-  await kvdbSet(state.bucket, 'queue', rest);
-  await kvdbSet(state.bucket, 'nowPlaying', np);
-  state.queue = rest;
-  state.nowPlaying = np;
-  renderRoomDynamic();
-  maybeUpdatePlayer(np);
 }
 
 function skipCurrent() { advanceQueue(); }
@@ -347,7 +351,7 @@ async function exitRoom() {
     const updated = current.filter((p) => p.id !== state.myId);
     await kvdbSet(state.bucket, 'participants', updated);
   }
-  stopPolling();
+  detachRoomListeners();
   state.role = null;
   state.joinStatus = 'idle';
   state.searchResults = [];
@@ -419,47 +423,73 @@ async function doSearch() {
   renderRoomDynamic();
 }
 
-/* ===================== Polling ===================== */
-function startPolling() {
-  stopPolling();
-  pollTimer = setInterval(async () => {
-    if (!state.bucket) return;
-    const [q, np, pl] = await Promise.all([
-      kvdbGet(state.bucket, 'queue', []),
-      kvdbGet(state.bucket, 'nowPlaying', null),
-      kvdbGet(state.bucket, 'participants', []),
-    ]);
-    state.queue = q;
-    state.nowPlaying = np;
-    state.participants = pl;
+/* ===================== Real-time room listeners ===================== */
+let roomRefs = {};
+
+function attachRoomListeners() {
+  if (!state.bucket) return;
+  detachRoomListeners();
+  const bucket = state.bucket;
+
+  roomRefs.queue = fbDb.ref(`rooms/${bucket}/queue`);
+  roomRefs.queue.on('value', (snap) => {
+    state.queue = snap.exists() ? snap.val() : [];
+    setSyncError(null);
+    handleHostAutoAdvance();
+    if (state.screen === 'room') renderRoomDynamic();
+  }, (e) => setSyncError('Sync error: ' + e.message));
+
+  roomRefs.nowPlaying = fbDb.ref(`rooms/${bucket}/nowPlaying`);
+  roomRefs.nowPlaying.on('value', (snap) => {
+    state.nowPlaying = snap.exists() ? snap.val() : null;
+    setSyncError(null);
+    handleHostAutoAdvance();
+    if (state.screen === 'room') renderRoomDynamic();
+    if (state.role === 'host') maybeUpdatePlayer(state.nowPlaying);
+  }, (e) => setSyncError('Sync error: ' + e.message));
+
+  roomRefs.participants = fbDb.ref(`rooms/${bucket}/participants`);
+  roomRefs.participants.on('value', (snap) => {
+    state.participants = snap.exists() ? snap.val() : [];
+    setSyncError(null);
     if (state.role === 'guest') {
-      const me = pl.find((p) => p.id === state.myId);
+      const me = state.participants.find((p) => p.id === state.myId);
       if (me && me.status !== state.joinStatus) {
         state.joinStatus = me.status;
         if (me.status === 'approved') enterRoom();
         else if (me.status === 'denied') { state.screen = 'denied'; render(); }
-        else if (me.status === 'kicked') { stopPolling(); state.screen = 'kicked'; render(); return; }
+        else if (me.status === 'kicked') { detachRoomListeners(); state.screen = 'kicked'; render(); return; }
       }
-      const sharedKey = await kvdbGet(state.bucket, 'apiKey', '');
-      if (sharedKey && sharedKey !== state.ytApiKey) state.ytApiKey = sharedKey;
-      const sharedLimit = await kvdbGet(state.bucket, 'songLimit', 0);
-      if (sharedLimit !== state.songLimit) state.songLimit = sharedLimit;
-    }
-    if (state.role === 'host' && !state.nowPlaying && state.queue.length > 0) {
-      advanceQueue();
-      return;
     }
     if (state.screen === 'room') renderRoomDynamic();
-    if (state.role === 'host') maybeUpdatePlayer(state.nowPlaying);
-  }, POLL_MS);
+  }, (e) => setSyncError('Sync error: ' + e.message));
+
+  if (state.role === 'guest') {
+    roomRefs.apiKey = fbDb.ref(`rooms/${bucket}/apiKey`);
+    roomRefs.apiKey.on('value', (snap) => { if (snap.exists()) state.ytApiKey = snap.val(); });
+
+    roomRefs.songLimit = fbDb.ref(`rooms/${bucket}/songLimit`);
+    roomRefs.songLimit.on('value', (snap) => { state.songLimit = snap.exists() ? snap.val() : 0; });
+  }
 }
-function stopPolling() { if (pollTimer) clearInterval(pollTimer); pollTimer = null; }
+
+function detachRoomListeners() {
+  Object.values(roomRefs).forEach((r) => { try { r.off(); } catch (e) {} });
+  roomRefs = {};
+}
+
+let advancing = false;
+function handleHostAutoAdvance() {
+  if (state.role === 'host' && !state.nowPlaying && state.queue.length > 0 && !advancing) {
+    advanceQueue();
+  }
+}
 
 function enterRoom() {
   state.screen = 'room';
   render();
   if (state.role === 'host') initPlayer();
-  startPolling();
+  attachRoomListeners();
 }
 
 /* ===================== Rendering ===================== */
