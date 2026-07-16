@@ -98,20 +98,42 @@ async function kvdbCreateBucket() {
 async function kvdbGet(bucket, key, fallback) {
   try {
     const res = await fetch(`/.netlify/functions/room?bucket=${encodeURIComponent(bucket)}&key=${encodeURIComponent(key)}`);
-    if (!res.ok) return fallback;
+    if (!res.ok) {
+      const errTxt = await res.text().catch(() => '');
+      setSyncError(`Read failed (${res.status}): ${errTxt}`);
+      return fallback;
+    }
     const txt = await res.text();
+    setSyncError(null);
     if (!txt || txt === 'null') return fallback;
     return JSON.parse(txt);
-  } catch (e) { return fallback; }
+  } catch (e) {
+    setSyncError('Read failed: ' + e.message);
+    return fallback;
+  }
 }
 async function kvdbSet(bucket, key, value) {
   try {
-    await fetch(`/.netlify/functions/room?bucket=${encodeURIComponent(bucket)}&key=${encodeURIComponent(key)}`, {
+    const res = await fetch(`/.netlify/functions/room?bucket=${encodeURIComponent(bucket)}&key=${encodeURIComponent(key)}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(value),
     });
-  } catch (e) { console.error('storage set failed', key, e); }
+    if (!res.ok) {
+      const errTxt = await res.text().catch(() => '');
+      setSyncError(`Save failed (${res.status}): ${errTxt}`);
+    } else {
+      setSyncError(null);
+    }
+  } catch (e) {
+    setSyncError('Save failed: ' + e.message);
+  }
+}
+let lastSyncError = null;
+function setSyncError(msg) {
+  lastSyncError = msg;
+  const el2 = document.getElementById('sync-error-banner');
+  if (el2) el2.textContent = msg || '';
 }
 
 /* ===================== State ===================== */
@@ -465,6 +487,7 @@ function renderRoomShell() {
         <button class="btn-ghost" id="exit-room-btn">Exit</button>
       </div>
     </div>
+    <div id="sync-error-banner" style="color:var(--pink); font-size:12px; margin-bottom:10px;"></div>
     <div id="qr-slot"></div>
     <div id="pending-slot"></div>
     <div class="now-playing-card">
