@@ -1,7 +1,7 @@
 const { getStore } = require("@netlify/blobs");
 
 exports.handler = async (event) => {
-  const store = getStore("karaoke-rooms");
+  const store = getStore({ name: "karaoke-rooms", consistency: "strong" });
   const params = event.queryStringParameters || {};
   const { bucket, key } = params;
 
@@ -13,15 +13,19 @@ exports.handler = async (event) => {
 
   const storeKey = `${bucket}:${key}`;
 
-  if (event.httpMethod === "GET") {
-    const value = await store.get(storeKey);
-    return { statusCode: 200, headers, body: value || "null" };
-  }
+  try {
+    if (event.httpMethod === "GET") {
+      const value = await store.get(storeKey);
+      return { statusCode: 200, headers, body: value || "null" };
+    }
 
-  if (event.httpMethod === "POST") {
-    await store.set(storeKey, event.body || "null");
-    return { statusCode: 200, headers, body: JSON.stringify({ ok: true }) };
-  }
+    if (event.httpMethod === "POST") {
+      await store.set(storeKey, event.body || "null");
+      return { statusCode: 200, headers, body: JSON.stringify({ ok: true }) };
+    }
 
-  return { statusCode: 405, headers, body: JSON.stringify({ error: "Method not allowed" }) };
+    return { statusCode: 405, headers, body: JSON.stringify({ error: "Method not allowed" }) };
+  } catch (e) {
+    return { statusCode: 500, headers, body: JSON.stringify({ error: e.message }) };
+  }
 };
