@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Karaoke Night</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Manrope:wght@400;500;700;800&display=swap');
+
+:root {
+  --bg: #14102B;
+  --surface: #1F1A3D;
+  --surface2: #2A2350;
+  --pink: #FF3D81;
+  --amber: #FFC93C;
+  --text: #F5F0FF;
+  --muted: #9B93C4;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: radial-gradient(circle at 50% 0%, var(--surface2) 0%, var(--bg) 60%);
+  font-family: 'Manrope', sans-serif;
+  color: var(--text);
+}
+#app { max-width: 480px; margin: 0 auto; padding: 16px 12px 60px; }
+.center-col { min-height: 70vh; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 20px; }
+.marquee-title {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 40px;
+  letter-spacing: 3px;
+  margin: 0;
+  background: linear-gradient(90deg, var(--amber), var(--pink));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-shadow: 0 0 24px rgba(255,61,129,0.35);
+}
+.header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.input {
+  width: 100%; box-sizing: border-box; padding: 12px 14px; border-radius: 10px;
+  border: 1px solid var(--surface2); background: var(--surface); color: var(--text);
+  font-family: 'Manrope', sans-serif; font-size: 15px; outline: none; margin-bottom: 8px;
+}
+.btn-primary {
+  padding: 14px 28px; border-radius: 999px; border: none;
+  background: linear-gradient(90deg, var(--pink), var(--amber)); color: #1A1330;
+  font-weight: 800; font-size: 16px; cursor: pointer; box-shadow: 0 0 24px rgba(255,61,129,0.4);
+}
+.btn-primary-sm { padding: 10px 18px; border-radius: 10px; border: none; background: var(--pink); color: #1A1330; font-weight: 800; cursor: pointer; }
+.btn-secondary { padding: 10px 18px; border-radius: 10px; border: 1px solid var(--pink); background: transparent; color: var(--pink); font-weight: 700; cursor: pointer; margin-top: 10px; }
+.btn-ghost { padding: 8px 14px; border-radius: 999px; border: 1px solid var(--surface2); background: var(--surface); color: var(--muted); font-size: 13px; cursor: pointer; }
+.btn-small-pink { padding: 6px 12px; border-radius: 8px; border: none; background: var(--pink); color: #1A1330; font-weight: 700; font-size: 13px; cursor: pointer; }
+.btn-small-ghost { padding: 6px 12px; border-radius: 8px; border: 1px solid var(--muted); background: transparent; color: var(--muted); font-size: 13px; cursor: pointer; }
+.panel { background: var(--surface); border-radius: 16px; padding: 16px; margin-bottom: 14px; border: 1px solid var(--surface2); }
+.panel-title { font-family: 'Bebas Neue', sans-serif; font-size: 20px; letter-spacing: 1px; color: var(--amber); margin-bottom: 10px; }
+.qr-panel { display: flex; gap: 14px; align-items: center; background: var(--surface); border-radius: 16px; padding: 16px; margin-bottom: 14px; border: 1px solid var(--surface2); }
+.request-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px dashed var(--surface2); }
+.now-playing-card { background: var(--surface); border-radius: 18px; padding: 18px; margin-bottom: 16px; border: 1px solid rgba(255,61,129,0.33); box-shadow: 0 0 32px rgba(255,61,129,0.18); }
+.now-playing-label { font-family: 'Bebas Neue', sans-serif; letter-spacing: 3px; color: var(--pink); font-size: 14px; margin-bottom: 10px; }
+.player-box { width: 100%; aspect-ratio: 16/9; border-radius: 12px; overflow: hidden; background: #000; margin-bottom: 10px; }
+.now-playing-title { font-weight: 800; font-size: 17px; margin-bottom: 2px; }
+.ticket-meta { font-size: 12px; color: var(--muted); }
+.ticket-row { position: relative; display: flex; align-items: center; gap: 10px; background: var(--surface2); border-radius: 12px; padding: 10px 12px; margin-bottom: 8px; border-left: 3px dashed rgba(255,201,60,0.53); }
+.ticket-thumb { width: 56px; height: 42px; object-fit: cover; border-radius: 6px; flex-shrink: 0; }
+.ticket-title { font-size: 14px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.result-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--surface2); }
+.icon-btn { border: none; background: var(--surface); color: var(--amber); border-radius: 6px; width: 24px; height: 20px; font-size: 10px; cursor: pointer; }
+.remove-btn { border: none; background: transparent; color: var(--muted); font-size: 16px; cursor: pointer; }
+.pill-tag { background: var(--surface2); color: var(--text); padding: 5px 12px; border-radius: 999px; font-size: 13px; display: inline-block; margin: 3px; }
+.pulse-dot { width: 16px; height: 16px; border-radius: 50%; background: var(--pink); margin: 0 auto 20px; animation: pulse 1.6s infinite; }
+@keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(255,61,129,0.7);} 70% { box-shadow: 0 0 0 16px rgba(255,61,129,0);} 100% { box-shadow: 0 0 0 0 rgba(255,61,129,0);} }
+.scroll-box::-webkit-scrollbar { width: 6px; }
+.scroll-box::-webkit-scrollbar-thumb { background: var(--surface2); border-radius: 4px; }
+.error-text { color: var(--pink); font-size: 13px; margin-top: 6px; }
+.hint-text { color: var(--muted); font-size: 12px; margin-top: 4px; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script>
+/* ===================== Config ===================== */
+const KARAOKE_CHANNELS = ['sing king', 'karafun', 'zzang karaoke', 'karaoke version', 'stingray karaoke', 'atomic karaoke'];
+const POLL_MS = 2500;
+
+/* ===================== Helpers ===================== */
+function uid(prefix) { return prefix + '-' + Math.random().toString(36).slice(2, 9); }
+function el(id) { return document.getElementById(id); }
+function escapeHtml(str) {
+  return String(str).replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+async function kvdbCreateBucket() {
+  // No external service needed anymore - just generate a room code locally.
+  return uid('room');
+}
+async function kvdbGet(bucket, key, fallback) {
+  try {
+    const res = await fetch(`/.netlify/functions/room?bucket=${encodeURIComponent(bucket)}&key=${encodeURIComponent(key)}`);
+    if (!res.ok) return fallback;
+    const txt = await res.text();
+    if (!txt || txt === 'null') return fallback;
+    return JSON.parse(txt);
+  } catch (e) { return fallback; }
+}
+async function kvdbSet(bucket, key, value) {
+  try {
+    await fetch(`/.netlify/functions/room?bucket=${encodeURIComponent(bucket)}&key=${encodeURIComponent(key)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(value),
+    });
+  } catch (e) { console.error('storage set failed', key, e); }
+}
+
+/* ===================== State ===================== */
+const state = {
+  screen: 'roleSelect', // roleSelect | waiting | denied | room
+  bucket: null,
+  role: null, // host | guest
+  myId: uid('user'),
+  name: '',
+  joinStatus: 'idle',
+  queue: [],
+  nowPlaying: null,
+  participants: [],
+  searchQuery: '',
+  searchResults: [],
+  searching: false,
+  searchError: '',
+  ytApiKey: '',
+  showApiKeyBox: true,
+  showQR: false,
+  copied: false,
+  manualRoomCode: '',
+};
+
+let pollTimer = null;
+let player = null;
+let playerReady = false;
+let lastLoadedVideoId = null;
+let lastLoadedStartedAt = null;
+
+/* ===================== Init from URL ===================== */
+(function initFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  const room = params.get('room');
+  if (room) state.bucket = room;
+})();
+
+/* ===================== YouTube IFrame API ===================== */
+let ytApiPromise = null;
+function loadYouTubeApi() {
+  if (window.YT && window.YT.Player) return Promise.resolve(window.YT);
+  if (ytApiPromise) return ytApiPromise;
+  ytApiPromise = new Promise((resolve) => {
+    window.onYouTubeIframeAPIReady = () => resolve(window.YT);
+    const tag = document.createElement('script');
+    tag.src = 'https://www.youtube.com/iframe_api';
+    document.body.appendChild(tag);
+  });
+  return ytApiPromise;
+}
+
+function initPlayer() {
+  loadYouTubeApi().then((YT) => {
+    player = new YT.Player('yt-player', {
+      height: '100%',
+      width: '100%',
+      playerVars: { rel: 0, playsinline: 1 },
+      events: {
+        onReady: () => {
+          playerReady = true;
+          if (state.nowPlaying) maybeUpdatePlayer(state.nowPlaying);
+        },
+        onStateChange: (e) => {
+          if (state.role === 'host' && e.data === YT.PlayerState.ENDED) {
+            advanceQueue();
+          }
+        },
+      },
+    });
+  });
+}
+
+function maybeUpdatePlayer(np) {
+  if (!player || !playerReady) return;
+  if (!np) return;
+  if (np.videoId !== lastLoadedVideoId || np.startedAt !== lastLoadedStartedAt) {
+    lastLoadedVideoId = np.videoId;
+    lastLoadedStartedAt = np.startedAt;
+    const elapsed = Math.max(0, Math.floor((Date.now() - np.startedAt) / 1000));
+    try { player.loadVideoById({ videoId: np.videoId, startSeconds: elapsed }); } catch (e) {}
+  }
+}
+
+/* ===================== Room actions ===================== */
+async function startHost() {
+  try {
+    if (!state.bucket) state.bucket = await kvdbCreateBucket();
+    history.replaceState(null, '', '?room=' + state.bucket);
+    state.role = 'host';
+    state.queue = await kvdbGet(state.bucket, 'queue', []);
+    state.nowPlaying = await kvdbGet(state.bucket, 'nowPlaying', null);
+    state.participants = await kvdbGet(state.bucket, 'participants', []);
+    enterRoom();
+  } catch (e) {
+    alert('Could not start room: ' + e.message);
+  }
+}
+
+async function requestJoin() {
+  const nameInput = el('guest-name-input');
+  const codeInput = el('room-code-input');
+  const name = nameInput ? nameInput.value.trim() : '';
+  if (!name) return;
+  if (!state.bucket && codeInput) state.bucket = codeInput.value.trim();
+  if (!state.bucket) { alert('Enter a room code or scan an invite QR first.'); return; }
+  history.replaceState(null, '', '?room=' + state.bucket);
+  state.name = name;
+  state.role = 'guest';
+  state.joinStatus = 'pending';
+  const current = await kvdbGet(state.bucket, 'participants', []);
+  const updated = current.filter((p) => p.id !== state.myId).concat([
+    { id: state.myId, name, status: 'pending', joinedAt: Date.now() },
+  ]);
+  await kvdbSet(state.bucket, 'participants', updated);
+  state.participants = updated;
+  state.screen = 'waiting';
+  render();
+  startPolling();
+}
+
+async function respondToRequest(id, status) {
+  const current = await kvdbGet(state.bucket, 'participants', []);
+  const updated = current.map((p) => (p.id === id ? { ...p, status } : p));
+  await kvdbSet(state.bucket, 'participants', updated);
+  state.participants = updated;
+  renderRoomDynamic();
+}
+
+async function addToQueue(video) {
+  const current = await kvdbGet(state.bucket, 'queue', []);
+  const updated = current.concat([{
+    id: uid('song'),
+    videoId: video.videoId,
+    title: video.title,
+    thumbnail: video.thumbnail,
+    addedBy: state.role === 'host' ? 'Host' : (state.name || 'Guest'),
+  }]);
+  await kvdbSet(state.bucket, 'queue', updated);
+  state.queue = updated;
+  renderRoomDynamic();
+}
+
+async function moveInQueue(id, dir) {
+  const current = await kvdbGet(state.bucket, 'queue', []);
+  const idx = current.findIndex((s) => s.id === id);
+  if (idx < 0) return;
+  const swap = idx + dir;
+  if (swap < 0 || swap >= current.length) return;
+  const updated = current.slice();
+  [updated[idx], updated[swap]] = [updated[swap], updated[idx]];
+  await kvdbSet(state.bucket, 'queue', updated);
+  state.queue = updated;
+  renderRoomDynamic();
+}
+
+async function removeFromQueue(id) {
+  const current = await kvdbGet(state.bucket, 'queue', []);
+  const updated = current.filter((s) => s.id !== id);
+  await kvdbSet(state.bucket, 'queue', updated);
+  state.queue = updated;
+  renderRoomDynamic();
+}
+
+async function advanceQueue() {
+  const current = await kvdbGet(state.bucket, 'queue', []);
+  if (current.length === 0) {
+    await kvdbSet(state.bucket, 'nowPlaying', null);
+    state.nowPlaying = null;
+    renderRoomDynamic();
+    return;
+  }
+  const [next, ...rest] = current;
+  const np = { ...next, startedAt: Date.now() };
+  await kvdbSet(state.bucket, 'queue', rest);
+  await kvdbSet(state.bucket, 'nowPlaying', np);
+  state.queue = rest;
+  state.nowPlaying = np;
+  renderRoomDynamic();
+  maybeUpdatePlayer(np);
+}
+
+function skipCurrent() { advanceQueue(); }
+
+async function exitRoom() {
+  if (state.role === 'guest' && state.bucket) {
+    const current = await kvdbGet(state.bucket, 'participants', []);
+    const updated = current.filter((p) => p.id !== state.myId);
+    await kvdbSet(state.bucket, 'participants', updated);
+  }
+  stopPolling();
+  state.role = null;
+  state.joinStatus = 'idle';
+  state.searchResults = [];
+  state.searchQuery = '';
+  state.showQR = false;
+  state.screen = 'roleSelect';
+  history.replaceState(null, '', window.location.pathname);
+  state.bucket = null;
+  render();
+}
+
+function copyLink() {
+  navigator.clipboard.writeText(window.location.href).then(() => {
+    state.copied = true;
+    renderRoomDynamic();
+    setTimeout(() => { state.copied = false; renderRoomDynamic(); }, 1800);
+  });
+}
+
+/* ===================== Search ===================== */
+async function doSearch() {
+  const qInput = el('search-input');
+  const keyInput = el('api-key-input');
+  const query = qInput ? qInput.value.trim() : '';
+  if (keyInput) state.ytApiKey = keyInput.value.trim();
+  if (!query) return;
+  if (!state.ytApiKey) {
+    state.searchError = 'Paste your YouTube API key above first.';
+    renderRoomDynamic();
+    return;
+  }
+  state.searching = true;
+  state.searchError = '';
+  renderRoomDynamic();
+  try {
+    const q = encodeURIComponent(query + ' karaoke');
+    const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=10&q=${q}&key=${encodeURIComponent(state.ytApiKey)}`;
+    const res = await fetch(url);
+    const data = await res.json();
+    if (data.error) {
+      state.searchError = data.error.message || 'Search failed. Check your API key.';
+      state.searchResults = [];
+    } else {
+      const items = (data.items || []).map((it) => ({
+        videoId: it.id.videoId,
+        title: it.snippet.title,
+        thumbnail: it.snippet.thumbnails && it.snippet.thumbnails.medium ? it.snippet.thumbnails.medium.url : '',
+        channel: it.snippet.channelTitle,
+      }));
+      items.sort((a, b) => {
+        const aKa = KARAOKE_CHANNELS.some((c) => (a.channel || '').toLowerCase().includes(c)) ? 0 : 1;
+        const bKa = KARAOKE_CHANNELS.some((c) => (b.channel || '').toLowerCase().includes(c)) ? 0 : 1;
+        return aKa - bKa;
+      });
+      state.searchResults = items;
+    }
+  } catch (e) {
+    state.searchError = 'Request failed: ' + e.message;
+  }
+  state.searching = false;
+  renderRoomDynamic();
+}
+
+/* ===================== Polling ===================== */
+function startPolling() {
+  stopPolling();
+  pollTimer = setInterval(async () => {
+    if (!state.bucket) return;
+    const [q, np, pl] = await Promise.all([
+      kvdbGet(state.bucket, 'queue', []),
+      kvdbGet(state.bucket, 'nowPlaying', null),
+      kvdbGet(state.bucket, 'participants', []),
+    ]);
+    state.queue = q;
+    state.nowPlaying = np;
+    state.participants = pl;
+    if (state.role === 'guest') {
+      const me = pl.find((p) => p.id === state.myId);
+      if (me && me.status !== state.joinStatus) {
+        state.joinStatus = me.status;
+        if (me.status === 'approved') enterRoom();
+        else if (me.status === 'denied') { state.screen = 'denied'; render(); }
+      }
+    }
+    if (state.role === 'host' && !state.nowPlaying && state.queue.length > 0) {
+      advanceQueue();
+      return;
+    }
+    if (state.screen === 'room') renderRoomDynamic();
+    maybeUpdatePlayer(state.nowPlaying);
+  }, POLL_MS);
+}
+function stopPolling() { if (pollTimer) clearInterval(pollTimer); pollTimer = null; }
+
+function enterRoom() {
+  state.screen = 'room';
+  render();
+  initPlayer();
+  startPolling();
+}
+
+/* ===================== Rendering ===================== */
+function render() {
+  const app = el('app');
+  if (state.screen === 'roleSelect') {
+    app.innerHTML = renderRoleSelect();
+    bindRoleSelectEvents();
+  } else if (state.screen === 'waiting') {
+    app.innerHTML = renderWaiting();
+    const cancelBtn = el('cancel-request-btn');
+    if (cancelBtn) cancelBtn.onclick = exitRoom;
+  } else if (state.screen === 'denied') {
+    app.innerHTML = renderDenied();
+  } else if (state.screen === 'room') {
+    app.innerHTML = renderRoomShell();
+    bindRoomEvents();
+    renderRoomDynamic();
+  }
+}
+
+function renderRoleSelect() {
+  const hasRoom = !!state.bucket;
+  return `
+    <div class="center-col">
+      <h1 class="marquee-title">KARAOKE NIGHT</h1>
+      <p style="color:var(--muted); margin-bottom:28px;">${hasRoom ? "You've got an invite link — join below" : "Pick how you're joining the room"}</p>
+      ${!hasRoom ? `<button class="btn-primary" id="start-host-btn">Start as Host</button><div style="height:14px"></div>` : ''}
+      <div style="display:flex; flex-direction:column; gap:10px; width:260px;">
+        <input class="input" id="guest-name-input" placeholder="Your name" />
+        ${!hasRoom ? `<input class="input" id="room-code-input" placeholder="Room code (from host)" />` : ''}
+        <button class="btn-secondary" id="join-btn" style="margin-top:0;">Request to Join</button>
+      </div>
+    </div>`;
+}
+function bindRoleSelectEvents() {
+  const hostBtn = el('start-host-btn');
+  if (hostBtn) hostBtn.onclick = startHost;
+  el('join-btn').onclick = requestJoin;
+}
+
+function renderWaiting() {
+  return `
+    <div class="center-col">
+      <div class="pulse-dot"></div>
+      <h2 style="font-family:'Bebas Neue',sans-serif; font-size:28px; letter-spacing:1px;">Waiting for the host to let you in…</h2>
+      <p style="color:var(--muted)">Hang tight, ${escapeHtml(state.name)}. This updates automatically.</p>
+      <button class="btn-ghost" id="cancel-request-btn" style="margin-top:16px;">Cancel request</button>
+    </div>`;
+}
+function renderDenied() {
+  return `<div class="center-col"><h2>Request denied</h2><p style="color:var(--muted)">The host didn't approve this request.</p></div>`;
+}
+
+function renderRoomShell() {
+  const isHost = state.role === 'host';
+  return `
+    <div class="header">
+      <h1 class="marquee-title">KARAOKE NIGHT</h1>
+      <div style="display:flex; gap:8px;">
+        ${isHost ? `<button class="btn-ghost" id="toggle-qr-btn">Invite QR</button>` : ''}
+        <button class="btn-ghost" id="exit-room-btn">Exit</button>
+      </div>
+    </div>
+    <div id="qr-slot"></div>
+    <div id="pending-slot"></div>
+    <div class="now-playing-card">
+      <div class="now-playing-label">NOW PLAYING</div>
+      <div id="now-playing-info-empty" style="color:var(--muted);">Nothing queued yet — search below and add a song.</div>
+      <div class="player-box" id="player-box" style="display:none;">
+        <div id="yt-player"></div>
+      </div>
+      <div id="now-playing-meta"></div>
+      ${isHost ? `<button class="btn-secondary" id="skip-btn" style="display:none;">Skip song</button>` : ''}
+    </div>
+    <div class="panel">
+      <div class="panel-title">Add a song</div>
+      <input type="password" class="input" id="api-key-input" placeholder="Paste your YouTube Data API key" value="${escapeHtml(state.ytApiKey)}" />
+      <div class="hint-text">Stored only in this browser tab's memory — never saved, never sent anywhere but YouTube.</div>
+      <div style="display:flex; gap:8px; margin-top:8px;">
+        <input class="input" id="search-input" placeholder="Search a song…" style="flex:1; margin-bottom:0;" />
+        <button class="btn-primary-sm" id="search-btn">Search</button>
+      </div>
+      <div id="search-error" class="error-text"></div>
+      <div id="search-results" class="scroll-box" style="max-height:260px; overflow-y:auto; margin-top:10px;"></div>
+    </div>
+    <div class="panel">
+      <div class="panel-title" id="queue-title">Up next (0)</div>
+      <div id="queue-list"></div>
+    </div>
+    <div class="panel" id="participants-panel" style="display:none;">
+      <div class="panel-title" id="participants-title">In the room (0)</div>
+      <div id="participants-list"></div>
+    </div>
+  `;
+}
+
+function bindRoomEvents() {
+  el('exit-room-btn').onclick = exitRoom;
+  const qrBtn = el('toggle-qr-btn');
+  if (qrBtn) qrBtn.onclick = () => { state.showQR = !state.showQR; renderRoomDynamic(); };
+  el('search-btn').onclick = doSearch;
+  el('search-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') doSearch(); });
+}
+
+function renderRoomDynamic() {
+  if (state.screen !== 'room') return;
+  const isHost = state.role === 'host';
+
+  // QR panel
+  const qrSlot = el('qr-slot');
+  if (qrSlot) {
+    if (isHost && state.showQR) {
+      const link = window.location.href;
+      const qrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&margin=8&data=${encodeURIComponent(link)}`;
+      qrSlot.innerHTML = `
+        <div class="qr-panel">
+          <img src="${qrSrc}" alt="QR code" width="180" height="180" style="border-radius:12px; background:#fff; padding:8px;" />
+          <div style="flex:1;">
+            <p style="margin:0 0 8px; font-weight:700;">Scan to join the room</p>
+            <p style="margin:0 0 10px; color:var(--muted); font-size:13px;">Guests scan, enter their name, then wait for your approval below.</p>
+            <button class="btn-ghost" id="copy-link-btn">${state.copied ? 'Copied!' : 'Copy invite link'}</button>
+          </div>
+        </div>`;
+      const copyBtn = el('copy-link-btn');
+      if (copyBtn) copyBtn.onclick = copyLink;
+    } else {
+      qrSlot.innerHTML = '';
+    }
+  }
+
+  // Pending requests
+  const pendingSlot = el('pending-slot');
+  const pending = state.participants.filter((p) => p.status === 'pending');
+  if (pendingSlot) {
+    if (isHost && pending.length > 0) {
+      pendingSlot.innerHTML = `
+        <div class="panel">
+          <div class="panel-title">Join requests</div>
+          ${pending.map((p) => `
+            <div class="request-row">
+              <span>${escapeHtml(p.name)}</span>
+              <div style="display:flex; gap:8px;">
+                <button class="btn-small-pink" data-admit="${p.id}">Admit</button>
+                <button class="btn-small-ghost" data-deny="${p.id}">Deny</button>
+              </div>
+            </div>`).join('')}
+        </div>`;
+      pendingSlot.querySelectorAll('[data-admit]').forEach((b) => b.onclick = () => respondToRequest(b.getAttribute('data-admit'), 'approved'));
+      pendingSlot.querySelectorAll('[data-deny]').forEach((b) => b.onclick = () => respondToRequest(b.getAttribute('data-deny'), 'denied'));
+    } else {
+      pendingSlot.innerHTML = '';
+    }
+  }
+
+  // Now playing
+  const emptyMsg = el('now-playing-info-empty');
+  const playerBox = el('player-box');
+  const meta = el('now-playing-meta');
+  const skipBtn = el('skip-btn');
+  if (state.nowPlaying) {
+    if (emptyMsg) emptyMsg.style.display = 'none';
+    if (playerBox) playerBox.style.display = 'block';
+    if (meta) meta.innerHTML = `<div class="now-playing-title">${escapeHtml(state.nowPlaying.title)}</div><div class="ticket-meta">added by ${escapeHtml(state.nowPlaying.addedBy)}</div>`;
+    if (skipBtn) { skipBtn.style.display = 'inline-block'; skipBtn.onclick = skipCurrent; }
+  } else {
+    if (emptyMsg) emptyMsg.style.display = 'block';
+    if (playerBox) playerBox.style.display = 'none';
+    if (meta) meta.innerHTML = '';
+    if (skipBtn) skipBtn.style.display = 'none';
+  }
+
+  // Search results
+  const searchErrorEl = el('search-error');
+  if (searchErrorEl) searchErrorEl.textContent = state.searchError || '';
+  const resultsEl = el('search-results');
+  if (resultsEl) {
+    resultsEl.innerHTML = state.searching ? '<div class="hint-text">Searching…</div>' : state.searchResults.map((r) => `
+      <div class="result-row">
+        <img src="${r.thumbnail}" class="ticket-thumb" alt="" />
+        <div style="flex:1; min-width:0;">
+          <div class="ticket-title">${escapeHtml(r.title)}</div>
+          <div class="ticket-meta">${escapeHtml(r.channel)}</div>
+        </div>
+        <button class="btn-small-pink" data-add="${r.videoId}">Add</button>
+      </div>`).join('');
+    resultsEl.querySelectorAll('[data-add]').forEach((b) => {
+      b.onclick = () => {
+        const vid = b.getAttribute('data-add');
+        const video = state.searchResults.find((r) => r.videoId === vid);
+        if (video) addToQueue(video);
+      };
+    });
+  }
+
+  // Queue
+  el('queue-title').textContent = `Up next (${state.queue.length})`;
+  const queueList = el('queue-list');
+  if (state.queue.length === 0) {
+    queueList.innerHTML = '<p style="color:var(--muted)">Queue is empty.</p>';
+  } else {
+    queueList.innerHTML = state.queue.map((item, idx) => {
+      const canMoveUp = isHost && idx > 0;
+      const canMoveDown = isHost && idx < state.queue.length - 1;
+      const canRemove = isHost || item.addedBy === (state.name || 'Guest');
+      return `
+        <div class="ticket-row">
+          <img src="${item.thumbnail}" class="ticket-thumb" alt="" />
+          <div style="flex:1; min-width:0;">
+            <div class="ticket-title">${escapeHtml(item.title)}</div>
+            <div class="ticket-meta">added by ${escapeHtml(item.addedBy)}</div>
+          </div>
+          <div style="display:flex; flex-direction:column; gap:4px;">
+            ${canMoveUp ? `<button class="icon-btn" data-up="${item.id}">▲</button>` : ''}
+            ${canMoveDown ? `<button class="icon-btn" data-down="${item.id}">▼</button>` : ''}
+          </div>
+          ${canRemove ? `<button class="remove-btn" data-remove="${item.id}">✕</button>` : ''}
+        </div>`;
+    }).join('');
+    queueList.querySelectorAll('[data-up]').forEach((b) => b.onclick = () => moveInQueue(b.getAttribute('data-up'), -1));
+    queueList.querySelectorAll('[data-down]').forEach((b) => b.onclick = () => moveInQueue(b.getAttribute('data-down'), 1));
+    queueList.querySelectorAll('[data-remove]').forEach((b) => b.onclick = () => removeFromQueue(b.getAttribute('data-remove')));
+  }
+
+  // Participants (host only)
+  const partPanel = el('participants-panel');
+  const active = state.participants.filter((p) => p.status === 'approved');
+  if (partPanel) {
+    if (isHost && active.length > 0) {
+      partPanel.style.display = 'block';
+      el('participants-title').textContent = `In the room (${active.length})`;
+      el('participants-list').innerHTML = active.map((p) => `<span class="pill-tag">${escapeHtml(p.name)}</span>`).join('');
+    } else {
+      partPanel.style.display = 'none';
+    }
+  }
+}
+
+/* ===================== Boot ===================== */
+render();
+</script>
+</body>
+</html>
